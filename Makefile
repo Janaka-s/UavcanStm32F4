@@ -14,11 +14,50 @@ CXX = arm-atollic-eabi-g++
 RM=rm -rf
 
 # Assembler, Compiler and Linker flags and linker script settings
-LINKER_FLAGS=-lm -mthumb -mhard-float -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -Wl,--gc-sections -T$(LINK_SCRIPT) -static  -Wl,--start-group -lc -lm -lstdc++ -lsupc++ -Wl,--end-group  -specs=nosys.specs  -Wl,-cref "-Wl,-Map=$(BIN_DIR)/Stm32Uavcan.map" -Wl,--defsym=malloc_getpagesize_P=0x1000
+LINKER_FLAGS= -lm -mthumb -mhard-float -mcpu=cortex-m4 \
+			-mfpu=fpv4-sp-d16 -Wl,--gc-sections -T$(LINK_SCRIPT) -static  \
+			-Wl,--start-group -lc -lm -lstdc++ -lsupc++ -Wl,--end-group  \
+			-specs=nosys.specs  -Wl,-cref "-Wl,-Map=$(BIN_DIR)/Stm32Uavcan.map" \
+			-Wl,--defsym=malloc_getpagesize_P=0x1000
 LINK_SCRIPT="stm32f4_flash.ld"
-ASSEMBLER_FLAGS=-c -g -O0 -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mthumb -mhard-float  -D"USE_STM32F4_DISCOVERY" -D"HSE_VALUE=8000000" -D"STM32F4XX" -D"STM32F40XX" -D"USE_STDPERIPH_DRIVER"  -x assembler-with-cpp  -IUtilities/STM32F4-Discovery -Isrc -ILibraries/CMSIS/Include -ILibraries/Device/STM32F4xx/Include -ILibraries/STM32F4xx_StdPeriph_Driver/inc
-COMPILER_FLAGS=-c -g -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -O0 -Wall -ffunction-sections -fdata-sections -mthumb -mhard-float  -D"USE_STM32F4_DISCOVERY" -D"HSE_VALUE=8000000" -D"STM32F4XX" -D"STM32F40XX" -D"USE_STDPERIPH_DRIVER"   -IUtilities/STM32F4-Discovery -Isrc -ILibraries/CMSIS/Include -ILibraries/Device/STM32F4xx/Include -ILibraries/STM32F4xx_StdPeriph_Driver/inc
-CXXCOMPILER_FLAGS=-fno-threadsafe-statics -c -g -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -O0 -Wall -ffunction-sections -fdata-sections -mthumb -mhard-float  -fno-exceptions -fno-rtti -D"USE_STM32F4_DISCOVERY" -D"HSE_VALUE=8000000" -D"STM32F4XX" -D"STM32F40XX" -D"USE_STDPERIPH_DRIVER"   -IUtilities/STM32F4-Discovery -Isrc -ILibraries/CMSIS/Include -ILibraries/Device/STM32F4xx/Include -ILibraries/STM32F4xx_StdPeriph_Driver/inc
+
+UDEFS = -DUAVCAN_STM32_TIMER_NUMBER=7          \
+         -DUAVCAN_STM32_NUM_IFACES=1            \
+         -DUAVCAN_STM32_BAREMETAL=1 				\
+         -DUAVCAN_CPP_VERSION=UAVCAN_CPP11      \
+		 -DSTM32F4xx=1
+		
+#          -DUAVCAN_STM32_IRQ_PRIORITY_MASK=4		\
+
+include Libraries/libuavcan/include.mk
+UINCDIR += -I$(LIBUAVCAN_INC)
+
+include Libraries/libuavcan_stm32/driver/include.mk
+UINCDIR += -I$(LIBUAVCAN_STM32_INC)
+         
+UINCDIR += -ILibraries/libuavcan/dsdlc_generated
+
+ASSEMBLER_FLAGS=-c -g -O0 -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mthumb -mhard-float  \
+			-D"USE_STM32F4_DISCOVERY" -D"HSE_VALUE=8000000" -D"STM32F4XX" -D"STM32F40XX" \
+			-D"USE_STDPERIPH_DRIVER"  -x assembler-with-cpp  \
+			$(UDEFS) \
+			-IUtilities/STM32F4-Discovery \
+			-Isrc -ILibraries/CMSIS/Include -ILibraries/Device/STM32F4xx/Include \
+			-ILibraries/STM32F4xx_StdPeriph_Driver/inc 
+COMPILER_FLAGS=-c -g -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -O0 -Wall -ffunction-sections -fdata-sections \
+			-mthumb -mhard-float  -D"USE_STM32F4_DISCOVERY" -D"HSE_VALUE=8000000" -D"STM32F4XX" -D"STM32F40XX" \
+			-D"USE_STDPERIPH_DRIVER" \
+			$(UDEFS) \
+			-IUtilities/STM32F4-Discovery -Isrc -ILibraries/CMSIS/Include \
+			-ILibraries/Device/STM32F4xx/Include -ILibraries/STM32F4xx_StdPeriph_Driver/inc \
+			-I$(UINCDIR)
+CXXCOMPILER_FLAGS=-fno-threadsafe-statics -c -g -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -O0 -Wall -ffunction-sections -fdata-sections -mthumb \
+			-mhard-float  -fno-exceptions -fno-rtti -D"USE_STM32F4_DISCOVERY" -D"HSE_VALUE=8000000" -D"STM32F4XX" -D"STM32F40XX" \
+			-D"USE_STDPERIPH_DRIVER"   \
+			$(UDEFS) \
+			-IUtilities/STM32F4-Discovery -Isrc -ILibraries/CMSIS/Include -ILibraries/Device/STM32F4xx/Include \
+			-ILibraries/STM32F4xx_StdPeriph_Driver/inc \
+			$(UINCDIR)
 
 # Define output directory
 OBJECT_DIR = Debug
