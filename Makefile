@@ -21,7 +21,7 @@ LINKER_FLAGS= -lm -mthumb -mhard-float -mcpu=cortex-m4 \
 			-Wl,--defsym=malloc_getpagesize_P=0x1000
 LINK_SCRIPT="stm32f4_flash.ld"
 
-UDEFS = -DUAVCAN_STM32_TIMER_NUMBER=7          \
+UDEFS = -DUAVCAN_STM32_TIMER_NUMBER=2          \
          -DUAVCAN_STM32_NUM_IFACES=1            \
          -DUAVCAN_STM32_BAREMETAL=1 				\
          -DUAVCAN_CPP_VERSION=UAVCAN_CPP11      \

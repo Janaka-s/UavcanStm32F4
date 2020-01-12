@@ -54,10 +54,10 @@
   */
 typedef enum 
 {
-  LED4 = 0,
-  LED3 = 1,
-  LED5 = 2,
-  LED6 = 3
+  LED_LOOP = 0, //LED4
+  LED_TX = 1, //LED3
+  LED_CAN_ERR = 2, //LED5
+  LED_CAN_OK = 3 //LED6
 } Led_TypeDef;
 
 typedef enum 

@@ -38,6 +38,32 @@ SOFTWARE.
 static constexpr int RxQueueSize = 64;
 static constexpr std::uint32_t BitRate = 1000000;
 
+void STM_EVAL_CANInit()
+{
+  GPIO_InitTypeDef  GPIO_InitStructure;
+  //PD0 (pullup),PD1
+  RCC_APB1PeriphClockCmd(RCC_APB1Periph_CAN1, ENABLE);
+
+  GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0;
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
+  GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
+  GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
+  GPIO_Init(GPIOD, &GPIO_InitStructure);
+
+  // Alternate functions
+	GPIO_PinAFConfig(GPIOD, GPIO_PinSource0, GPIO_AF_CAN1);
+
+  GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
+  GPIO_InitStructure.GPIO_Pin = GPIO_Pin_1;
+  GPIO_Init(GPIOD, &GPIO_InitStructure);
+
+  // Alternate functions
+	GPIO_PinAFConfig(GPIOD, GPIO_PinSource1, GPIO_AF_CAN1);
+
+  RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOD, ENABLE);
+}
+
 /**
  * These functions are platform dependent, so they are not included in this example.
  * Refer to the relevant platform documentation to learn how to implement them.
@@ -61,6 +87,7 @@ uavcan::ICanDriver& getCanDriver()
         if (res < 0)
         {
             // Handle the error
+            printf("\nCan init error");
         }
     }
     return can.driver;
@@ -112,18 +139,20 @@ int main(void)
   /* TODO - Add your application code here */
 
   /* Initialize LEDs */
-  STM_EVAL_LEDInit(LED3);
-  STM_EVAL_LEDInit(LED4);
-  STM_EVAL_LEDInit(LED5);
-  STM_EVAL_LEDInit(LED6);
+  printf("Initing Pins\n");
+  STM_EVAL_LEDInit(LED_LOOP);
+  STM_EVAL_LEDInit(LED_TX);
+  STM_EVAL_LEDInit(LED_CAN_ERR);
+  STM_EVAL_LEDInit(LED_CAN_OK);
+  STM_EVAL_CANInit();
 
-  /* Turn on LEDs */
-  STM_EVAL_LEDOn(LED3);
-  STM_EVAL_LEDOn(LED4);
-  STM_EVAL_LEDOn(LED5);
-  STM_EVAL_LEDOn(LED6);
+  /* Turn LEDs */
+  STM_EVAL_LEDOn(LED_LOOP);
+  STM_EVAL_LEDOff(LED_TX);
+  STM_EVAL_LEDOff(LED_CAN_ERR);
+  STM_EVAL_LEDOff(LED_CAN_OK);
 
-  const int self_node_id = 10;
+  const int self_node_id = 1;
 
   /*
     * Node initialization.
@@ -175,34 +204,41 @@ int main(void)
     */
   while (true)
   {
-      /*
-        * If there's nothing to do, the thread blocks inside the driver's
-        * method select() until the timeout expires or an error occurs (e.g. driver failure).
-        * All error codes are listed in the header uavcan/error.hpp.
-        */
-      const int res = node.spin(uavcan::MonotonicDuration::fromMSec(1000));
-      if (res < 0)
-      {
-          std::cerr << "Transient failure: " << res << std::endl;
-      }
+    STM_EVAL_LEDToggle(LED_LOOP);
+    /*
+      * If there's nothing to do, the thread blocks inside the driver's
+      * method select() until the timeout expires or an error occurs (e.g. driver failure).
+      * All error codes are listed in the header uavcan/error.hpp.
+      */
+    const int res = node.spin(uavcan::MonotonicDuration::fromMSec(1000));
+    if (res < 0)
+    {
+        std::cerr << "Transient failure: " << res << std::endl;
+    }
 
-      /*
-        * Random status transitions.
-        * In real applications, the status code shall reflect node's health.
-        */
-      const float random = std::rand() / float(RAND_MAX);
-      if (random < 0.7)
-      {
-          node.setHealthOk();
-      }
-      else if (random < 0.9)
-      {
-          node.setHealthWarning();
-      }
-      else
-      {
-          node.setHealthError();
-      }
+    /*
+      * Random status transitions.
+      * In real applications, the status code shall reflect node's health.
+      */
+    const float random = std::rand() / float(RAND_MAX);
+    if (random < 0.7)
+    {
+        node.setHealthOk();
+        STM_EVAL_LEDOn(LED_CAN_OK);
+        STM_EVAL_LEDOff(LED_CAN_ERR);
+    }
+    else if (random < 0.9)
+    {
+        node.setHealthWarning();
+        STM_EVAL_LEDOff(LED_CAN_OK);
+        STM_EVAL_LEDOff(LED_CAN_ERR);
+    }
+    else
+    {
+        node.setHealthError();
+        STM_EVAL_LEDOff(LED_CAN_OK);
+        STM_EVAL_LEDOn(LED_CAN_ERR);
+    }
   }
 }
 
