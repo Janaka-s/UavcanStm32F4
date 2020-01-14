@@ -117,6 +117,22 @@ static Node& getNode()
 /* Private function prototypes */
 /* Private functions */
 
+/** TODO:
+ * Get alt key working on VSCode
+ * Get state machine to remain in ready mode
+ * Define basic message and transmit
+ * Why atolic debugger start delay
+ * Why atolic hang when target reset
+ * Upgrade atolic
+ * Install STM cube with examples
+ * Get comms between two nodes going (LEDs to display receival)
+ * Define:
+ *  Node status
+ *  Long binary message
+ *  Request Response
+ *  Pub sub
+ * 
+ */ 
 /**
 **===========================================================================
 **
