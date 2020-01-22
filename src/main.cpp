@@ -35,8 +35,19 @@ SOFTWARE.
 #include <unistd.h>
 #include <uavcan_stm32/uavcan_stm32.hpp>
 
+/*
+ * We're going to use messages of type uavcan.protocol.debug.KeyValue, so the appropriate header must be included.
+ * Given a data type named X, the header file name would be:
+ *      X.replace('.', '/') + ".hpp"
+ */
+#include <uavcan/protocol/debug/KeyValue.hpp> // uavcan.protocol.debug.KeyValue
+#include <uavcan/protocol/debug/LogMessage.hpp>
+#include <uavcan/helpers/ostream.hpp>
+
 static constexpr int RxQueueSize = 64;
 static constexpr std::uint32_t BitRate = 1000000;
+
+#define PUBLISHER 0
 
 void STM_EVAL_CANInit()
 {
@@ -116,21 +127,185 @@ static Node& getNode()
 /* Private variables */
 /* Private function prototypes */
 /* Private functions */
+class keyValPublisher
+{
+  public:
+  uavcan::Publisher<uavcan::protocol::debug::KeyValue> kv_pub;
+
+  keyValPublisher(Node &node) :
+    kv_pub(node)
+  {
+    /*
+      * Create the publisher object to broadcast standard key-value messages of type uavcan.protocol.debug.KeyValue.
+      * Keep in mind that most classes defined in the library are not copyable; attempt to copy objects of
+      * such classes will result in compilation failure.
+      * A publishing node won't see its own messages.
+      */
+    
+    const int kv_pub_init_res = kv_pub.init();
+    if (kv_pub_init_res < 0)
+    {
+        std::cerr << "Failed to start the publisher; error: " << kv_pub_init_res << std::endl;
+    }
+
+    /*
+      * TX timeout can be overridden if needed.
+      * Default value should be OK for most use cases.
+      */
+    kv_pub.setTxTimeout(uavcan::MonotonicDuration::fromMSec(1000));
+
+
+    /*
+      * Priority of outgoing tranfers can be changed as follows.
+      * Default priority is 16 (medium).
+      */
+    kv_pub.setPriority(uavcan::TransferPriority::MiddleLower);
+
+    std::cout << "Setting up keyValPair publisher \n";
+  };
+
+  bool publishKeyValPair()
+  {
+      /*
+          * Publishing a random value using the publisher created above.
+          * All message types have zero-initializing default constructors.
+          * Relevant usage info for every data type is provided in its DSDL definition.
+          */
+          uavcan::protocol::debug::KeyValue kv_msg;  // Always zero initialized
+          kv_msg.value = std::rand() / float(RAND_MAX);
+
+          /*
+          * Arrays in DSDL types are quite extensive in the sense that they can be static,
+          * or dynamic (no heap needed - all memory is pre-allocated), or they can emulate std::string.
+          * The last one is called string-like arrays.
+          * ASCII strings can be directly assigned or appended to string-like arrays.
+          * For more info, please read the documentation for the class uavcan::Array<>.
+          */
+          kv_msg.key = "a";   // "a"
+          kv_msg.key += "b";  // "ab"
+          kv_msg.key += "c";  // "abc"
+
+          /*
+          * Publishing the message.
+          */
+          const int pub_res = kv_pub.broadcast(kv_msg);
+          if (pub_res < 0)
+          {
+              std::cerr << "KV publication failure: " << pub_res << std::endl;
+          }
+          return true;
+  };
+};
+
+class logAndKeyValSubscriber
+{
+  public:
+  uavcan::Subscriber<uavcan::protocol::debug::LogMessage> log_sub;
+  uavcan::Subscriber<uavcan::protocol::debug::KeyValue> kv_sub;
+
+  logAndKeyValSubscriber( Node &node):
+  log_sub(node),
+  kv_sub(node)
+  {};
+
+  void subscribeLog()
+  {    
+    /*
+     * Subscribing to standard log messages of type uavcan.protocol.debug.LogMessage.
+     *
+     * Received messages will be passed to the application via a callback, the type of which can be set via the second
+     * template argument.
+     * In C++11 mode, callback type defaults to std::function<>.
+     * In C++03 mode, callback type defaults to a plain function pointer; use a binder object to call member
+     * functions as callbacks (refer to uavcan::MethodBinder<>).
+     *
+     * N.B.: Some libuavcan users report that C++ lambda functions when used with GCC may actually break the code
+     *       on some embedded targets, particularly ARM Cortex M0. These reports still remain unconfirmed though;
+     *       please refer to the UAVCAN mailing list to learn more.
+     *
+     * The type of the argument of the callback can be either of these two:
+     *  - T&
+     *  - uavcan::ReceivedDataStructure<T>&
+     * For the first option, ReceivedDataStructure<T>& will be cast into a T& implicitly.
+     *
+     * The class uavcan::ReceivedDataStructure extends the received data structure with extra information obtained from
+     * the transport layer, such as Source Node ID, timestamps, Transfer ID, index of the redundant interface this
+     * transfer was picked up from, etc.
+     */
+
+    const int log_sub_start_res = log_sub.start(
+        [&](const uavcan::ReceivedDataStructure<uavcan::protocol::debug::LogMessage>& msg)
+        {
+            /*
+             * The message will be streamed in YAML format.
+             */
+            //std::cout << msg << std::endl;
+            /*
+             * If the standard iostreams are not available (they rarely available in embedded environments),
+             * use the helper class uavcan::OStream defined in the header file <uavcan/helpers/ostream.hpp>.
+             */
+             //uavcan::OStream::instance() << msg << uavcan::OStream::endl;
+             std::cout << "Node:" << msg.getSrcNodeID().get() << ", Text:" << msg.text.c_str() << std::endl;
+        });
+      /*
+      * C++03 WARNING
+      * The code above will not compile in C++03, because it uses a lambda function.
+      * In order to compile the code in C++03, move the code from the lambda to a standalone static function.
+      * Use uavcan::MethodBinder<> to invoke member functions.
+      */
+
+      if (log_sub_start_res < 0)
+      {
+          std::cerr <<"Failed to start the log subscriber; error: " << log_sub_start_res;
+      }
+      else
+      {
+        std::cout <<"Subscribing to Logs\n";
+      }
+  };
+
+    /*
+     * Subscribing to messages of type uavcan.protocol.debug.KeyValue.
+     * This time we don't want to receive extra information about the received message, so the callback's argument type
+     * would be just T& instead of uavcan::ReceivedDataStructure<T>&.
+     * The callback will print the message in YAML format via std::cout (also refer to uavcan::OStream).
+     */
+  void keyValSubscribe()
+  {
+    const int kv_sub_start_res =
+        kv_sub.start([&](const uavcan::protocol::debug::KeyValue& msg) 
+        { 
+          //std::cout << msg << std::endl; 
+          //uavcan::OStream::instance() << msg << uavcan::OStream::endl;
+          std::cout << "Key:"<< msg.key.c_str() << ", Val:" << msg.value << ", Len:" << std::endl;
+          STM_EVAL_LEDToggle(LED_TX);
+        });
+
+    if (kv_sub_start_res < 0)
+    {
+        std::cerr <<"Failed to start the key/value subscriber; error: " << kv_sub_start_res;
+    }
+    else
+    {
+      std::cout <<"Subscribing to keyValPair\n";
+    }
+  };
+};
 
 /** TODO:
- * Get alt key working on VSCode
- * Get state machine to remain in ready mode
- * Define basic message and transmit
- * Why atolic debugger start delay
- * Why atolic hang when target reset
- * Upgrade atolic
- * Install STM cube with examples
+ * Get alt key working on VSCode            [DONE]
+ * Get state machine to remain in ready mode [DONE]
+ * Define basic message and transmit        [DONE]
+ * Why atolic debugger start delay          [DONE]
+ * Why atolic hang when target reset        [DONE: Right click and terminate]
+ * Upgrade atolic                           [DONE]
+ * Install STM cube with examples           [DONE]
  * Get comms between two nodes going (LEDs to display receival)
  * Define:
  *  Node status
  *  Long binary message
  *  Request Response
- *  Pub sub
+ *  Pub sub                                 [DONE]
  * 
  */ 
 /**
@@ -168,7 +343,11 @@ int main(void)
   STM_EVAL_LEDOff(LED_CAN_ERR);
   STM_EVAL_LEDOff(LED_CAN_OK);
 
+#if (PUBLISHER==1)
   const int self_node_id = 1;
+#else
+  const int self_node_id = 2;
+#endif
 
   /*
     * Node initialization.
@@ -179,7 +358,11 @@ int main(void)
 
   node.setNodeID(self_node_id);
 
-  node.setName("org.uavcan.tutorial.init");
+#if (PUBLISHER==1)
+  node.setName("org.uavcan.tutorial.test.messages.pub");
+#else
+  node.setName("org.uavcan.tutorial.test.messages.sub");
+#endif
 
   uavcan::protocol::SoftwareVersion sw_version;  // Standard type uavcan.protocol.SoftwareVersion
   sw_version.major = 1;
@@ -193,11 +376,24 @@ int main(void)
     * Start the node.
     * All returnable error codes are listed in the header file uavcan/error.hpp.
     */
+   /*
+     * Dependent objects (e.g. publishers, subscribers, servers, callers, timers, ...) can be initialized only
+     * if the node is running. Note that all dependent objects always keep a reference to the node object.
+     */
   const int node_start_res = node.start();
   if (node_start_res < 0)
   {
       std::cout<<"Failed to start the node; error: " <<node_start_res;
   }
+
+#if (PUBLISHER==1)
+  keyValPublisher kvpub(node);
+#else
+  logAndKeyValSubscriber subscriber(node);
+  subscriber.subscribeLog();
+  subscriber.keyValSubscribe();
+#endif
+  
   /*
     * Informing other nodes that we're ready to work.
     * Default mode is INITIALIZING.
@@ -218,6 +414,7 @@ int main(void)
     * Node loop.
     * The thread should not block outside Node::spin().
     */
+  auto firstRun = true;
   while (true)
   {
     STM_EVAL_LEDToggle(LED_LOOP);
@@ -236,27 +433,21 @@ int main(void)
       * Random status transitions.
       * In real applications, the status code shall reflect node's health.
       */
-    const float random = std::rand() / float(RAND_MAX);
-    if (random < 0.7)
+    if (firstRun)
     {
         node.setHealthOk();
         STM_EVAL_LEDOn(LED_CAN_OK);
         STM_EVAL_LEDOff(LED_CAN_ERR);
+        firstRun = false;
     }
-    else if (random < 0.9)
-    {
-        node.setHealthWarning();
-        STM_EVAL_LEDOff(LED_CAN_OK);
-        STM_EVAL_LEDOff(LED_CAN_ERR);
-    }
-    else
-    {
-        node.setHealthError();
-        STM_EVAL_LEDOff(LED_CAN_OK);
-        STM_EVAL_LEDOn(LED_CAN_ERR);
-    }
+
+  #if (PUBLISHER==1)
+    kvpub.publishKeyValPair();
+  #else
+  #endif
   }
 }
+
 
 
 /*
