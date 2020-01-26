@@ -202,10 +202,12 @@ class logAndKeyValSubscriber
   public:
   uavcan::Subscriber<uavcan::protocol::debug::LogMessage> log_sub;
   uavcan::Subscriber<uavcan::protocol::debug::KeyValue> kv_sub;
+  uint64_t m_counter;
 
   logAndKeyValSubscriber( Node &node):
   log_sub(node),
-  kv_sub(node)
+  kv_sub(node),
+  m_counter(0)
   {};
 
   void subscribeLog()
@@ -277,7 +279,7 @@ class logAndKeyValSubscriber
         { 
           //std::cout << msg << std::endl; 
           //uavcan::OStream::instance() << msg << uavcan::OStream::endl;
-          std::cout << "Key:"<< msg.key.c_str() << ", Val:" << msg.value << ", Len:" << std::endl;
+          std::cout << "Key:"<< msg.key.c_str() << ", Val:" << msg.value << ", Count:" << m_counter++ << "\r";
           STM_EVAL_LEDToggle(LED_TX);
         });
 
@@ -336,12 +338,15 @@ int main(void)
   STM_EVAL_LEDInit(LED_CAN_ERR);
   STM_EVAL_LEDInit(LED_CAN_OK);
   STM_EVAL_CANInit();
+  STM_EVAL_PBInit(BUTTON_USER, BUTTON_MODE_GPIO);
 
   /* Turn LEDs */
   STM_EVAL_LEDOn(LED_LOOP);
   STM_EVAL_LEDOff(LED_TX);
   STM_EVAL_LEDOff(LED_CAN_ERR);
   STM_EVAL_LEDOff(LED_CAN_OK);
+
+  while (!STM_EVAL_PBGetState(BUTTON_USER));
 
 #if (PUBLISHER==1)
   const int self_node_id = 1;
