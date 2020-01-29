@@ -34,6 +34,8 @@ SOFTWARE.
 #include <cstdlib>
 #include <unistd.h>
 #include <uavcan_stm32/uavcan_stm32.hpp>
+#include <string>
+#include <sstream>
 
 /*
  * We're going to use messages of type uavcan.protocol.debug.KeyValue, so the appropriate header must be included.
@@ -44,10 +46,15 @@ SOFTWARE.
 #include <uavcan/protocol/debug/LogMessage.hpp>
 #include <uavcan/helpers/ostream.hpp>
 
+/*
+ * This example uses the service type uavcan.protocol.file.BeginFirmwareUpdate.
+ */
+#include <uavcan/protocol/file/BeginFirmwareUpdate.hpp>
+
 static constexpr int RxQueueSize = 64;
 static constexpr std::uint32_t BitRate = 1000000;
 
-#define PUBLISHER 0
+#define PUBLISHER 1
 
 void STM_EVAL_CANInit()
 {
@@ -73,6 +80,16 @@ void STM_EVAL_CANInit()
 	GPIO_PinAFConfig(GPIOD, GPIO_PinSource1, GPIO_AF_CAN1);
 
   RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOD, ENABLE);
+}
+
+namespace patch
+{
+    template < typename T > std::string to_string( const T& n )
+    {
+        std::ostringstream stm ;
+        stm << n ;
+        return stm.str() ;
+    }
 }
 
 /**
@@ -294,6 +311,185 @@ class logAndKeyValSubscriber
   };
 };
 
+using uavcan::protocol::file::BeginFirmwareUpdate;
+class FWUpdateService
+{
+  /*
+    * Starting the server.
+    * This server doesn't do anything useful; it just prints the received request and returns some meaningless
+    * response.
+    *
+    * The service callback accepts two arguments:
+    *  - a reference to a request structure (input)
+    *  - a reference to a default-initialized response structure (output)
+    * The type of the input can be either of these two:
+    *  - T::Request&
+    *  - uavcan::ReceivedDataStructure<T::Request>&
+    * The type of the output is strictly T::Response&.
+    * Note that for the service data structure, it is not possible to instantiate T itself, nor does it make any
+    * sense.
+    *
+    * In C++11 mode, callback type defaults to std::function<>.
+    * In C++03 mode, callback type defaults to a plain function pointer; use a binder object to call member
+    * functions as callbacks (refer to uavcan::MethodBinder<>).
+    */
+    uavcan::ServiceServer<BeginFirmwareUpdate> srv;
+    uint64_t m_counter;
+
+    public:
+    FWUpdateService( Node &node ):
+    srv(node),
+    m_counter(0) 
+    {
+    };
+
+    void startService() 
+    {
+      const int srv_start_res = srv.start(
+      [&](const uavcan::ReceivedDataStructure<BeginFirmwareUpdate::Request>& req, BeginFirmwareUpdate::Response& rsp)
+      {
+          std::cout << req << std::endl;
+          rsp.error = rsp.ERROR_UNKNOWN;
+          std::string s = "Some Error Msg [" + patch::to_string(m_counter) + "]\n";
+          rsp.optional_error_message = s.c_str();
+          STM_EVAL_LEDToggle(LED_CAN_ERR);
+          std::cout << "FWUpdate msg, Counter:"<< m_counter++ << std::endl;
+      });
+      /*
+      * C++03 WARNING
+      * The code above will not compile in C++03, because it uses a lambda function.
+      * In order to compile the code in C++03, move the code from the lambda to a standalone static function.
+      * Use uavcan::MethodBinder<> to invoke member functions.
+      */
+
+      if (srv_start_res < 0)
+      {
+          std::exit(1);                   // TODO proper error handling
+      }
+      else
+      {        
+        std::cout<<"Starting FWUpdate service"<<std::endl;
+      }
+    };    
+};
+
+
+using uavcan::protocol::file::BeginFirmwareUpdate;
+class FWUpdateClient
+{  
+  uavcan::ServiceClient<BeginFirmwareUpdate> client;
+
+  public:
+  FWUpdateClient( Node &node ):
+  client(node)
+  {
+    std::cout<<"Instantiating FWUpdateClient\n";
+  };
+
+  void InitClient()
+  {  /*
+     * Initializing the client. Remember that client objects are noncopyable.
+     * Note that calling client.init() is not necessary - the object can be initialized ad hoc during the first call.
+     */
+    const int client_init_res = client.init();
+    if (client_init_res < 0)
+    {
+        std::cerr <<"Failed to init the client; error: " << patch::to_string(client_init_res);
+        return;
+    }
+
+    /*
+     * Setting the callback.
+     * This callback will be executed when the call is completed.
+     * Note that the callback will ALWAYS be called even if the service call has timed out; this guarantee
+     * allows to simplify error handling in the application.
+     */
+    client.setCallback([](const uavcan::ServiceCallResult<BeginFirmwareUpdate>& call_result)
+        {
+            if (call_result.isSuccessful())  // Whether the call was successful, i.e. whether the response was received
+            {
+                // The result can be directly streamed; the output will be formatted in human-readable YAML.
+                std::cout << call_result << std::endl;
+                STM_EVAL_LEDToggle(LED_CAN_ERR);
+            }
+            else
+            {
+                std::cerr << "Service call to node "
+                          << static_cast<int>(call_result.getCallID().server_node_id.get())
+                          << " has failed" << std::endl;
+            }
+        });
+    /*
+     * C++03 WARNING
+     * The code above will not compile in C++03, because it uses a lambda function.
+     * In order to compile the code in C++03, move the code from the lambda to a standalone static function.
+     * Use uavcan::MethodBinder<> to invoke member functions.
+     */
+
+    /*
+     * Service call timeout can be overridden if needed, though it's not recommended.
+     */
+    client.setRequestTimeout(uavcan::MonotonicDuration::fromMSec(200));
+
+    /*
+     * It is possible to adjust priority of the outgoing service request transfers.
+     * According to the specification, the services are supposed to use the same priority for response transfers.
+     * Default priority is medium, which is 16.
+     */
+    client.setPriority(uavcan::TransferPriority::OneHigherThanLowest);
+  };
+  void callFWUpdate(uint8_t server_node_id)
+    {
+      /*
+      * Calling the remote service.
+      * Generated service data types have two nested types:
+      *   T::Request  - request data structure
+      *   T::Response - response data structure
+      * For the service data structure, it is not possible to instantiate T itself, nor does it make any sense.
+      */
+      BeginFirmwareUpdate::Request request;
+      request.image_file_remote_path.path = "/some/path/for/file";
+
+      /*
+      * It is possible to perform multiple concurrent calls using the same client object.
+      * The class ServiceClient provides the following methods that allow to control execution of each call:
+      *
+      *  int call(NodeID server_node_id, const RequestType& request)
+      *      Initiate a new non-blocking call.
+      *
+      *  int call(NodeID server_node_id, const RequestType& request, ServiceCallID& out_call_id)
+      *      Initiate a new non-blocking call and return its ServiceCallID descriptor by reference.
+      *      The descriptor allows to query the progress of the call or cancel it later.
+      *
+      *  void cancelCall(ServiceCallID call_id)
+      *      Cancel a specific call using its descriptor.
+      *
+      *  void cancelAllCalls()
+      *      Cancel all calls.
+      *
+      *  bool hasPendingCallToServer(NodeID server_node_id) const
+      *      Whether the client object has pending calls to the given server at the moment.
+      *
+      *  unsigned getNumPendingCalls() const
+      *      Returns the total number of pending calls at the moment.
+      *
+      *  bool hasPendingCalls() const
+      *      Whether the client object has any pending calls at the moment.
+      */
+      const int call_res = client.call(server_node_id, request);
+      if (call_res < 0)
+      {
+          std::cerr << "Unable to perform service call: " << patch::to_string(call_res);
+          return;
+      }
+    };
+
+    bool HasPendingCalls()
+    {
+      return client.hasPendingCalls();
+    };
+};
+
 /** TODO:
  * Get alt key working on VSCode            [DONE]
  * Get state machine to remain in ready mode [DONE]
@@ -305,8 +501,8 @@ class logAndKeyValSubscriber
  * Get comms between two nodes going (LEDs to display receival)
  * Define:
  *  Node status
- *  Long binary message
- *  Request Response
+ *  Long binary message                     
+ *  Request Response                        [DONE]
  *  Pub sub                                 [DONE]
  * 
  */ 
@@ -393,10 +589,14 @@ int main(void)
 
 #if (PUBLISHER==1)
   keyValPublisher kvpub(node);
+  FWUpdateService fwUpdate(node);
+  fwUpdate.startService();
 #else
   logAndKeyValSubscriber subscriber(node);
   subscriber.subscribeLog();
   subscriber.keyValSubscribe();
+  FWUpdateClient fwUpdateClient(node);
+  fwUpdateClient.InitClient();
 #endif
   
   /*
@@ -449,6 +649,10 @@ int main(void)
   #if (PUBLISHER==1)
     kvpub.publishKeyValPair();
   #else
+    if (!fwUpdateClient.HasPendingCalls())
+    {
+      fwUpdateClient.callFWUpdate(1);
+    }
   #endif
   }
 }
