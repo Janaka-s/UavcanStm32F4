@@ -228,8 +228,21 @@ bool CanTxQueue::topPriorityHigherOrEqual(const CanFrame& rhs_frame) const
 /*
  * CanIOManager
  */
+//####>>Test code to test if UAVCAN retransmits data lost in network layer
+#include <stdio.h>
+static uint32_t errorInjector = 0; 
+//####<<
 int CanIOManager::sendToIface(uint8_t iface_index, const CanFrame& frame, MonotonicTime tx_deadline, CanIOFlags flags)
 {
+    //####>>Test code to test if UAVCAN retransmits data lost in network layer
+    errorInjector++;
+    if ((errorInjector % 50) == 0)
+    {
+        using namespace std;
+        printf("Squshing packet\n");
+        return 1;
+    }
+    //####<<
     UAVCAN_ASSERT(iface_index < MaxCanIfaces);
     ICanIface* const iface = driver_.getIface(iface_index);
     if (iface == UAVCAN_NULLPTR)

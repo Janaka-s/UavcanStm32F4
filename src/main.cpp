@@ -54,7 +54,7 @@ SOFTWARE.
 static constexpr int RxQueueSize = 64;
 static constexpr std::uint32_t BitRate = 1000000;
 
-#define PUBLISHER 1
+#define PUBLISHER 0
 
 void STM_EVAL_CANInit()
 {
@@ -350,8 +350,9 @@ class FWUpdateService
       {
           std::cout << req << std::endl;
           rsp.error = rsp.ERROR_UNKNOWN;
-          std::string s = "Some Error Msg [" + patch::to_string(m_counter) + "]\n";
-          rsp.optional_error_message = s.c_str();
+          // std::string s = "Some Error Msg [" + patch::to_string(m_counter) + "]\n";
+          // rsp.optional_error_message = s.c_str();
+          rsp.optional_error_message = req.image_file_remote_path.path.c_str();
           STM_EVAL_LEDToggle(LED_CAN_ERR);
           std::cout << "FWUpdate msg, Counter:"<< m_counter++ << std::endl;
       });
@@ -409,7 +410,8 @@ class FWUpdateClient
             if (call_result.isSuccessful())  // Whether the call was successful, i.e. whether the response was received
             {
                 // The result can be directly streamed; the output will be formatted in human-readable YAML.
-                std::cout << call_result << std::endl;
+                //std::cout << call_result << std::endl;
+                std::cout << call_result.getResponse().optional_error_message.c_str() << std::endl;
                 STM_EVAL_LEDToggle(LED_CAN_ERR);
             }
             else
@@ -440,6 +442,7 @@ class FWUpdateClient
   };
   void callFWUpdate(uint8_t server_node_id)
     {
+      static uint32_t counter=0;
       /*
       * Calling the remote service.
       * Generated service data types have two nested types:
@@ -448,7 +451,10 @@ class FWUpdateClient
       * For the service data structure, it is not possible to instantiate T itself, nor does it make any sense.
       */
       BeginFirmwareUpdate::Request request;
-      request.image_file_remote_path.path = "/some/path/for/file";
+      //request.image_file_remote_path.path = "/some/path/for/file";
+      char s[20];
+      snprintf(s, 20, "%08ld", counter++);
+      request.image_file_remote_path.path = s;
 
       /*
       * It is possible to perform multiple concurrent calls using the same client object.
@@ -479,7 +485,8 @@ class FWUpdateClient
       const int call_res = client.call(server_node_id, request);
       if (call_res < 0)
       {
-          std::cerr << "Unable to perform service call: " << patch::to_string(call_res);
+          //std::cerr << "Unable to perform service call: " << patch::to_string(call_res);
+          std::cout<<"Got response from call\n";
           return;
       }
     };
@@ -592,11 +599,12 @@ int main(void)
   FWUpdateService fwUpdate(node);
   fwUpdate.startService();
 #else
-  logAndKeyValSubscriber subscriber(node);
-  subscriber.subscribeLog();
-  subscriber.keyValSubscribe();
+  //logAndKeyValSubscriber subscriber(node);
+  //subscriber.subscribeLog();
+  //subscriber.keyValSubscribe();
   FWUpdateClient fwUpdateClient(node);
   fwUpdateClient.InitClient();
+  uint32_t counter=0;
 #endif
   
   /*
@@ -651,7 +659,8 @@ int main(void)
   #else
     if (!fwUpdateClient.HasPendingCalls())
     {
-      fwUpdateClient.callFWUpdate(1);
+      if (((counter++)%2)==0) //only do it 2nd time around the loop so LEDs look different
+        fwUpdateClient.callFWUpdate(1);
     }
   #endif
   }
