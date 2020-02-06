@@ -636,7 +636,7 @@ int main(void)
       * method select() until the timeout expires or an error occurs (e.g. driver failure).
       * All error codes are listed in the header uavcan/error.hpp.
       */
-    const int res = node.spin(uavcan::MonotonicDuration::fromMSec(1000));
+    const int res = node.spin(uavcan::MonotonicDuration::fromMSec(100));
     if (res < 0)
     {
         std::cerr << "Transient failure: " << res << std::endl;
