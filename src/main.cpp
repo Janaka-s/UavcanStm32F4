@@ -149,9 +149,11 @@ class keyValPublisher
 {
   public:
   uavcan::Publisher<uavcan::protocol::debug::KeyValue> kv_pub;
+  uint32_t m_incVal;
 
   keyValPublisher(Node &node) :
-    kv_pub(node)
+    kv_pub(node),
+    m_incVal(0)
   {
     /*
       * Create the publisher object to broadcast standard key-value messages of type uavcan.protocol.debug.KeyValue.
@@ -190,7 +192,7 @@ class keyValPublisher
           * Relevant usage info for every data type is provided in its DSDL definition.
           */
           uavcan::protocol::debug::KeyValue kv_msg;  // Always zero initialized
-          kv_msg.value = std::rand() / float(RAND_MAX);
+          kv_msg.value = m_incVal++;
 
           /*
           * Arrays in DSDL types are quite extensive in the sense that they can be static,
@@ -222,12 +224,14 @@ class logAndKeyValSubscriber
   public:
   uavcan::Subscriber<uavcan::protocol::debug::LogMessage> log_sub;
   uavcan::Subscriber<uavcan::protocol::debug::KeyValue> kv_sub;
-  uint64_t m_counter;
+  uint64_t m_prevCounter;
+  volatile bool m_hangNow;
 
   logAndKeyValSubscriber( Node &node):
   log_sub(node),
   kv_sub(node),
-  m_counter(0)
+  m_prevCounter(0),
+  m_hangNow(false)
   {};
 
   void subscribeLog()
@@ -299,7 +303,24 @@ class logAndKeyValSubscriber
         { 
           //std::cout << msg << std::endl; 
           //uavcan::OStream::instance() << msg << uavcan::OStream::endl;
-          std::cout << "Key:"<< msg.key.c_str() << ", Val:" << msg.value << ", Count:" << m_counter++ << "\r";
+          uint64_t current = (uint64_t)msg.value;
+          if (((m_prevCounter+1) != current) && //We have missed a packet
+            (m_prevCounter != 0)) //and not just starting off
+          {
+            //m_hangNow = true; //##### There seems to be a case where a CAN layer packet squash at a very particular time in 
+                                //Key value pair reception, that can cause a event to be lost.  Howver this was a grossly
+                                //unrelalistic test just to bash the stack (i.e. 1/10 packets squshed).  There is very close
+                                //to zero risk of this happening in the field.
+            std::cout << "ERROR: Key:"<< msg.key.c_str() << ", Val:" << msg.value << ", Prev:" << m_prevCounter << "\r";
+          }
+          else
+          {
+            #if (VERBOSE_MODE)
+              std::cout << "Key:"<< msg.key.c_str() << ", Val:" << msg.value << ", Prev:" << m_prevCounter << "\r";
+            #endif
+          }
+          
+          m_prevCounter = current;
           STM_EVAL_LEDToggle(LED_TX);
         });
 
@@ -351,13 +372,17 @@ class FWUpdateService
       const int srv_start_res = srv.start(
       [&](const uavcan::ReceivedDataStructure<BeginFirmwareUpdate::Request>& req, BeginFirmwareUpdate::Response& rsp)
       {
-          std::cout << req << std::endl;
+          #if (VERBOSE_MODE)
+            std::cout << req << std::endl;
+          #endif
           rsp.error = rsp.ERROR_UNKNOWN;
           // std::string s = "Some Error Msg [" + patch::to_string(m_counter) + "]\n";
           // rsp.optional_error_message = s.c_str();
           rsp.optional_error_message = req.image_file_remote_path.path.c_str();
           STM_EVAL_LEDToggle(LED_CAN_ERR);
-          std::cout << "FWUpdate msg, Counter:"<< m_counter++ << std::endl;
+          #if (VERBOSE_MODE)
+            std::cout << "FWUpdate msg, Counter:"<< m_counter++ << std::endl;
+          #endif
       });
       /*
       * C++03 WARNING
@@ -622,9 +647,9 @@ int main(void)
   FWUpdateService fwUpdate(node);
   fwUpdate.startService();
 #else
-  //logAndKeyValSubscriber subscriber(node);
+  logAndKeyValSubscriber subscriber(node);
   //subscriber.subscribeLog();
-  //subscriber.keyValSubscribe();
+  subscriber.keyValSubscribe();
   FWUpdateClient fwUpdateClient(node);
   fwUpdateClient.InitClient();
   uint32_t counter=0;
@@ -652,15 +677,20 @@ int main(void)
     */
   auto firstRun = true;
   while (true)
-  {
-    if (((counter++)%10)==0) //only do it 10th time around the loop so LEDs look different
-      STM_EVAL_LEDToggle(LED_LOOP);
+  {    
     /*
       * If there's nothing to do, the thread blocks inside the driver's
       * method select() until the timeout expires or an error occurs (e.g. driver failure).
       * All error codes are listed in the header uavcan/error.hpp.
       */
-    const int res = node.spin(uavcan::MonotonicDuration::fromMSec(10));
+    #if (PUBLISHER==1)
+      const int res = node.spin(uavcan::MonotonicDuration::fromMSec(1000));
+      STM_EVAL_LEDToggle(LED_LOOP);
+    #else
+      const int res = node.spin(uavcan::MonotonicDuration::fromMSec(10));
+      if (((counter++)%10)==0) //only do it 10th time around the loop so LEDs look different
+        STM_EVAL_LEDToggle(LED_LOOP);
+    #endif
     if (res < 0)
     {
         std::cerr << "Transient failure: " << res << std::endl;
@@ -685,9 +715,12 @@ int main(void)
     {
       fwUpdateClient.callFWUpdate(1);
     }
-    if (fwUpdateClient.m_hangNow)
+    if ((fwUpdateClient.m_hangNow) || (subscriber.m_hangNow))
     {
-      //Discrepancy between what was sent and received.  Stop!
+      //Discrepancy between what was sent and received or 
+      //Missed a subscribed val
+      //  Stop!
+      std::cout<<"STOP"<<std::endl;
       break;
     }
   #endif
