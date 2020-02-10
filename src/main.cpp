@@ -55,6 +55,7 @@ static constexpr int RxQueueSize = 64;
 static constexpr std::uint32_t BitRate = 1000000;
 
 #define PUBLISHER 0
+#define VERBOSE_MODE 0
 
 void STM_EVAL_CANInit()
 {
@@ -201,6 +202,8 @@ class keyValPublisher
           kv_msg.key = "a";   // "a"
           kv_msg.key += "b";  // "ab"
           kv_msg.key += "c";  // "abc"
+
+          //TODO: Add Keyvalue incrementer and check of received packets to code
 
           /*
           * Publishing the message.
@@ -379,10 +382,15 @@ using uavcan::protocol::file::BeginFirmwareUpdate;
 class FWUpdateClient
 {  
   uavcan::ServiceClient<BeginFirmwareUpdate> client;
+  uint32_t m_counter;
+  public: 
+  volatile bool m_hangNow;
 
   public:
   FWUpdateClient( Node &node ):
-  client(node)
+  client(node),
+  m_counter(0),
+  m_hangNow(false)
   {
     std::cout<<"Instantiating FWUpdateClient\n";
   };
@@ -405,20 +413,35 @@ class FWUpdateClient
      * Note that the callback will ALWAYS be called even if the service call has timed out; this guarantee
      * allows to simplify error handling in the application.
      */
-    client.setCallback([](const uavcan::ServiceCallResult<BeginFirmwareUpdate>& call_result)
+    client.setCallback([&](const uavcan::ServiceCallResult<BeginFirmwareUpdate>& call_result)
         {
             if (call_result.isSuccessful())  // Whether the call was successful, i.e. whether the response was received
             {
                 // The result can be directly streamed; the output will be formatted in human-readable YAML.
                 //std::cout << call_result << std::endl;
-                std::cout << call_result.getResponse().optional_error_message.c_str() << std::endl;
+                std::string s(call_result.getResponse().optional_error_message.c_str());
+                ulong resp = std::strtoul(s.c_str(), nullptr, 10);
+                if (resp != m_counter)
+                {
+                  std::cout<<"ERROR: Counter:"<<m_counter<<",returnVal:"<<resp<<std::endl;
+                  m_hangNow = true;
+                }
+                else
+                {
+                  #if (VERBOSE_MODE==1)
+                    std::cout << s << std::endl;
+                  #endif
+                }
+                
                 STM_EVAL_LEDToggle(LED_CAN_ERR);
             }
             else
             {
+                #if (VERBOSE_MODE==1)
                 std::cerr << "Service call to node "
                           << static_cast<int>(call_result.getCallID().server_node_id.get())
                           << " has failed" << std::endl;
+                #endif
             }
         });
     /*
@@ -442,7 +465,6 @@ class FWUpdateClient
   };
   void callFWUpdate(uint8_t server_node_id)
     {
-      static uint32_t counter=0;
       /*
       * Calling the remote service.
       * Generated service data types have two nested types:
@@ -451,9 +473,10 @@ class FWUpdateClient
       * For the service data structure, it is not possible to instantiate T itself, nor does it make any sense.
       */
       BeginFirmwareUpdate::Request request;
+      m_counter++;
       //request.image_file_remote_path.path = "/some/path/for/file";
       char s[20];
-      snprintf(s, 20, "%08ld", counter++);
+      snprintf(s, 20, "%08ld", m_counter);
       request.image_file_remote_path.path = s;
 
       /*
@@ -485,8 +508,8 @@ class FWUpdateClient
       const int call_res = client.call(server_node_id, request);
       if (call_res < 0)
       {
-          //std::cerr << "Unable to perform service call: " << patch::to_string(call_res);
-          std::cout<<"Got response from call\n";
+          //std:: << "Unable to perform service call: " << patch::to_string(call_res);
+          std::cout<<"Unable to perform service call:"<<m_counter<<"\n";
           return;
       }
     };
@@ -630,13 +653,14 @@ int main(void)
   auto firstRun = true;
   while (true)
   {
-    STM_EVAL_LEDToggle(LED_LOOP);
+    if (((counter++)%10)==0) //only do it 10th time around the loop so LEDs look different
+      STM_EVAL_LEDToggle(LED_LOOP);
     /*
       * If there's nothing to do, the thread blocks inside the driver's
       * method select() until the timeout expires or an error occurs (e.g. driver failure).
       * All error codes are listed in the header uavcan/error.hpp.
       */
-    const int res = node.spin(uavcan::MonotonicDuration::fromMSec(100));
+    const int res = node.spin(uavcan::MonotonicDuration::fromMSec(10));
     if (res < 0)
     {
         std::cerr << "Transient failure: " << res << std::endl;
@@ -659,8 +683,12 @@ int main(void)
   #else
     if (!fwUpdateClient.HasPendingCalls())
     {
-      if (((counter++)%2)==0) //only do it 2nd time around the loop so LEDs look different
-        fwUpdateClient.callFWUpdate(1);
+      fwUpdateClient.callFWUpdate(1);
+    }
+    if (fwUpdateClient.m_hangNow)
+    {
+      //Discrepancy between what was sent and received.  Stop!
+      break;
     }
   #endif
   }

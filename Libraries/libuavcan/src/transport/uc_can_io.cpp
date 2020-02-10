@@ -239,7 +239,7 @@ int CanIOManager::sendToIface(uint8_t iface_index, const CanFrame& frame, Monoto
     if ((errorInjector % 50) == 0)
     {
         using namespace std;
-        printf("Squshing packet\n");
+        printf("Pkt Sqush\n");
         return 1;
     }
     //####<<
