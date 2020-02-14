@@ -1,3 +1,4 @@
 *.o
 /Debug/Stm32Uavcan.map
 /Debug/Stm32Uavcan.elf
+/Debug/*

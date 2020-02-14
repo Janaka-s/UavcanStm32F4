@@ -14,12 +14,12 @@ CXX = arm-atollic-eabi-g++
 RM=rm -rf
 
 # Assembler, Compiler and Linker flags and linker script settings
+LINK_SCRIPT="stm32f4_flash.ld"
 LINKER_FLAGS= -lm -mthumb -mhard-float -mcpu=cortex-m4 \
 			-mfpu=fpv4-sp-d16 -Wl,--gc-sections -T$(LINK_SCRIPT) -static  \
 			-Wl,--start-group -lc -lm -lstdc++ -lsupc++ -Wl,--end-group  \
-			-specs=nosys.specs  -Wl,-cref "-Wl,-Map=$(BIN_DIR)/Stm32Uavcan.map" \
+			-specs=nosys.specs  -Wl,-cref "-Wl,-Map=$(BIN_DIR)/Stm32UavcanNew.map" \
 			-Wl,--defsym=malloc_getpagesize_P=0x1000
-LINK_SCRIPT="stm32f4_flash.ld"
 
 UDEFS = -DUAVCAN_STM32_TIMER_NUMBER=2          \
          -DUAVCAN_STM32_NUM_IFACES=1            \
@@ -29,10 +29,10 @@ UDEFS = -DUAVCAN_STM32_TIMER_NUMBER=2          \
 		
 #          -DUAVCAN_STM32_IRQ_PRIORITY_MASK=4		\
 
-include Libraries/libuavcan/include.mk
+include Libraries/libuavcan/libuavcan/include.mk
 UINCDIR += -I$(LIBUAVCAN_INC)
 
-include Libraries/libuavcan_stm32/driver/include.mk
+include Libraries/libuavcan/libuavcan_drivers/stm32/driver/include.mk
 UINCDIR += -I$(LIBUAVCAN_STM32_INC)
          
 UINCDIR += -ILibraries/libuavcan/dsdlc_generated
@@ -98,10 +98,12 @@ OBJS := $(OBJS:%.cpp=$(OBJECT_DIR)/%.o)
 all: buildelf
 
 buildelf: $(OBJS) 
-	$(CXX) -o "$(BIN_DIR)/Stm32Uavcan.elf" $(OBJS) $(LINKER_FLAGS)
+	$(CXX) -o "$(BIN_DIR)/Stm32UavcanNew.elf" $(OBJS) $(LINKER_FLAGS)
+	arm-atollic-eabi-objcopy -O ihex "$(BIN_DIR)/Stm32UavcanNew.elf" "$(BIN_DIR)/Stm32UavcanNew.hex"
+	/opt/Atollic_TrueSTUDIO_for_STM32_x86_64_9.3.0/ide/jre/bin/java -jar /opt/Atollic_TrueSTUDIO_for_STM32_x86_64_9.3.0/Tools/arm-atollic-reports.jar sizeinfo list "$(BIN_DIR)/Stm32UavcanNew.elf"
 
 clean:
-	$(RM) $(OBJS) "$(BIN_DIR)/Stm32Uavcan.elf" "$(BIN_DIR)/Stm32Uavcan.map"
+	$(RM) $(OBJS) "$(BIN_DIR)/Stm32UavcanNew.elf" "$(BIN_DIR)/Stm32UavcanNew.map"
 
 
 ##################

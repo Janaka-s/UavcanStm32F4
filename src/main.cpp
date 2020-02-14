@@ -602,7 +602,7 @@ int main(void)
 #if (PUBLISHER==1)
   const int self_node_id = 1;
 #else
-  const int self_node_id = 2;
+  const int self_node_id = 5;
 #endif
 
   /*
