@@ -44,14 +44,14 @@ ASSEMBLER_FLAGS=-c -g -O0 -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mthumb -mhard-float
 			-IUtilities/STM32F4-Discovery \
 			-Isrc -ILibraries/CMSIS/Include -ILibraries/Device/STM32F4xx/Include \
 			-ILibraries/STM32F4xx_StdPeriph_Driver/inc 
-COMPILER_FLAGS=-c -g -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -O0 -Wall -ffunction-sections -fdata-sections \
+COMPILER_FLAGS=-c -g -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -O0 -Wextra -ffunction-sections -fdata-sections \
 			-mthumb -mhard-float  -D"USE_STM32F4_DISCOVERY" -D"HSE_VALUE=8000000" -D"STM32F4XX" -D"STM32F40XX" \
 			-D"USE_STDPERIPH_DRIVER" \
 			$(UDEFS) \
 			-IUtilities/STM32F4-Discovery -Isrc -ILibraries/CMSIS/Include \
 			-ILibraries/Device/STM32F4xx/Include -ILibraries/STM32F4xx_StdPeriph_Driver/inc \
 			-I$(UINCDIR)
-CXXCOMPILER_FLAGS=-fno-threadsafe-statics -c -g -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -O0 -Wall -ffunction-sections -fdata-sections -mthumb \
+CXXCOMPILER_FLAGS=-fno-threadsafe-statics -c -g -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -O0 -Wextra -ffunction-sections -fdata-sections -mthumb \
 			-mhard-float  -fno-exceptions -fno-rtti -D"USE_STM32F4_DISCOVERY" -D"HSE_VALUE=8000000" -D"STM32F4XX" -D"STM32F40XX" \
 			-D"USE_STDPERIPH_DRIVER"   \
 			$(UDEFS) \

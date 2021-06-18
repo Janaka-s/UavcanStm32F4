@@ -28,23 +28,23 @@ SOFTWARE.
 */
 
 /* Includes */
-#include "stm32f4xx.h"
 #include "stm32f4_discovery.h"
-#include <iostream>
+#include "stm32f4xx.h"
 #include <cstdlib>
-#include <unistd.h>
-#include <uavcan_stm32/uavcan_stm32.hpp>
-#include <string>
+#include <iostream>
 #include <sstream>
+#include <string>
+#include <uavcan_stm32/uavcan_stm32.hpp>
+#include <unistd.h>
 
 /*
  * We're going to use messages of type uavcan.protocol.debug.KeyValue, so the appropriate header must be included.
  * Given a data type named X, the header file name would be:
  *      X.replace('.', '/') + ".hpp"
  */
-#include <uavcan/protocol/debug/KeyValue.hpp> // uavcan.protocol.debug.KeyValue
-#include <uavcan/protocol/debug/LogMessage.hpp>
 #include <uavcan/helpers/ostream.hpp>
+#include <uavcan/protocol/debug/KeyValue.hpp>   // uavcan.protocol.debug.KeyValue
+#include <uavcan/protocol/debug/LogMessage.hpp>
 
 /*
  * This example uses the service type uavcan.protocol.file.BeginFirmwareUpdate.
@@ -59,53 +59,54 @@ static constexpr std::uint32_t BitRate = 1000000;
 
 void STM_EVAL_CANInit()
 {
-  GPIO_InitTypeDef  GPIO_InitStructure;
-  //PD0 (pullup),PD1
-  RCC_APB1PeriphClockCmd(RCC_APB1Periph_CAN1, ENABLE);
+    GPIO_InitTypeDef GPIO_InitStructure;
+    //PD0 (pullup),PD1
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_CAN1, ENABLE);
 
-  GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0;
-  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
-  GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
-  GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
-  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
-  GPIO_Init(GPIOD, &GPIO_InitStructure);
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
+    GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
+    GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
+    GPIO_Init(GPIOD, &GPIO_InitStructure);
 
-  // Alternate functions
-	GPIO_PinAFConfig(GPIOD, GPIO_PinSource0, GPIO_AF_CAN1);
+    // Alternate functions
+    GPIO_PinAFConfig(GPIOD, GPIO_PinSource0, GPIO_AF_CAN1);
 
-  GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
-  GPIO_InitStructure.GPIO_Pin = GPIO_Pin_1;
-  GPIO_Init(GPIOD, &GPIO_InitStructure);
+    GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_1;
+    GPIO_Init(GPIOD, &GPIO_InitStructure);
 
-  // Alternate functions
-	GPIO_PinAFConfig(GPIOD, GPIO_PinSource1, GPIO_AF_CAN1);
+    // Alternate functions
+    GPIO_PinAFConfig(GPIOD, GPIO_PinSource1, GPIO_AF_CAN1);
 
-  RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOD, ENABLE);
+    RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOD, ENABLE);
 }
 
 namespace patch
 {
-    template < typename T > std::string to_string( const T& n )
-    {
-        std::ostringstream stm ;
-        stm << n ;
-        return stm.str() ;
-    }
+template <typename T>
+std::string to_string(const T &n)
+{
+    std::ostringstream stm;
+    stm << n;
+    return stm.str();
 }
+}   // namespace patch
 
 /**
  * These functions are platform dependent, so they are not included in this example.
  * Refer to the relevant platform documentation to learn how to implement them.
  */
-uavcan::ICanDriver& getCanDriver();
-uavcan::ISystemClock& getSystemClock();
+uavcan::ICanDriver &getCanDriver();
+uavcan::ISystemClock &getSystemClock();
 
-uavcan::ISystemClock& getSystemClock()
+uavcan::ISystemClock &getSystemClock()
 {
     return uavcan_stm32::SystemClock::instance();
 }
 
-uavcan::ICanDriver& getCanDriver()
+uavcan::ICanDriver &getCanDriver()
 {
     static uavcan_stm32::CanInitHelper<RxQueueSize> can;
     static bool initialized = false;
@@ -135,7 +136,7 @@ typedef uavcan::Node<NodeMemoryPoolSize> Node;
  * Note that most library objects are noncopyable (e.g. publishers, subscribers, servers, callers, timers, ...).
  * Attempt to copy a noncopyable object causes compilation failure.
  */
-static Node& getNode()
+static Node &getNode()
 {
     static Node node(getCanDriver(), getSystemClock());
     return node;
@@ -148,95 +149,90 @@ static Node& getNode()
 class keyValPublisher
 {
   public:
-  uavcan::Publisher<uavcan::protocol::debug::KeyValue> kv_pub;
-  uint32_t m_incVal;
+    uavcan::Publisher<uavcan::protocol::debug::KeyValue> kv_pub;
+    uint32_t m_incVal;
 
-  keyValPublisher(Node &node) :
-    kv_pub(node),
-    m_incVal(0)
-  {
-    /*
+    keyValPublisher(Node &node)
+        : kv_pub(node), m_incVal(0)
+    {
+        /*
       * Create the publisher object to broadcast standard key-value messages of type uavcan.protocol.debug.KeyValue.
       * Keep in mind that most classes defined in the library are not copyable; attempt to copy objects of
       * such classes will result in compilation failure.
       * A publishing node won't see its own messages.
       */
-    
-    const int kv_pub_init_res = kv_pub.init();
-    if (kv_pub_init_res < 0)
-    {
-        std::cerr << "Failed to start the publisher; error: " << kv_pub_init_res << std::endl;
-    }
 
-    /*
+        const int kv_pub_init_res = kv_pub.init();
+        if (kv_pub_init_res < 0)
+        {
+            std::cerr << "Failed to start the publisher; error: " << kv_pub_init_res
+                      << std::endl;
+        }
+
+        /*
       * TX timeout can be overridden if needed.
       * Default value should be OK for most use cases.
       */
-    kv_pub.setTxTimeout(uavcan::MonotonicDuration::fromMSec(1000));
+        kv_pub.setTxTimeout(uavcan::MonotonicDuration::fromMSec(1000));
 
-
-    /*
+        /*
       * Priority of outgoing tranfers can be changed as follows.
       * Default priority is 16 (medium).
       */
-    kv_pub.setPriority(uavcan::TransferPriority::MiddleLower);
+        kv_pub.setPriority(uavcan::TransferPriority::MiddleLower);
 
-    std::cout << "Setting up keyValPair publisher \n";
-  };
+        std::cout << "Setting up keyValPair publisher \n";
+    };
 
-  bool publishKeyValPair()
-  {
-      /*
+    bool publishKeyValPair()
+    {
+        /*
           * Publishing a random value using the publisher created above.
           * All message types have zero-initializing default constructors.
           * Relevant usage info for every data type is provided in its DSDL definition.
           */
-          uavcan::protocol::debug::KeyValue kv_msg;  // Always zero initialized
-          kv_msg.value = m_incVal++;
+        uavcan::protocol::debug::KeyValue kv_msg;   // Always zero initialized
+        kv_msg.value = m_incVal++;
 
-          /*
+        /*
           * Arrays in DSDL types are quite extensive in the sense that they can be static,
           * or dynamic (no heap needed - all memory is pre-allocated), or they can emulate std::string.
           * The last one is called string-like arrays.
           * ASCII strings can be directly assigned or appended to string-like arrays.
           * For more info, please read the documentation for the class uavcan::Array<>.
           */
-          kv_msg.key = "a";   // "a"
-          kv_msg.key += "b";  // "ab"
-          kv_msg.key += "c";  // "abc"
+        kv_msg.key = "a";    // "a"
+        kv_msg.key += "b";   // "ab"
+        kv_msg.key += "c";   // "abc"
 
-          //TODO: Add Keyvalue incrementer and check of received packets to code
+        //TODO: Add Keyvalue incrementer and check of received packets to code
 
-          /*
+        /*
           * Publishing the message.
           */
-          const int pub_res = kv_pub.broadcast(kv_msg);
-          if (pub_res < 0)
-          {
-              std::cerr << "KV publication failure: " << pub_res << std::endl;
-          }
-          return true;
-  };
+        const int pub_res = kv_pub.broadcast(kv_msg);
+        if (pub_res < 0)
+        {
+            std::cerr << "KV publication failure: " << pub_res << std::endl;
+        }
+        return true;
+    };
 };
 
 class logAndKeyValSubscriber
 {
   public:
-  uavcan::Subscriber<uavcan::protocol::debug::LogMessage> log_sub;
-  uavcan::Subscriber<uavcan::protocol::debug::KeyValue> kv_sub;
-  uint64_t m_prevCounter;
-  volatile bool m_hangNow;
+    uavcan::Subscriber<uavcan::protocol::debug::LogMessage> log_sub;
+    uavcan::Subscriber<uavcan::protocol::debug::KeyValue> kv_sub;
+    uint64_t m_prevCounter;
+    volatile bool m_hangNow;
 
-  logAndKeyValSubscriber( Node &node):
-  log_sub(node),
-  kv_sub(node),
-  m_prevCounter(0),
-  m_hangNow(false)
-  {};
+    logAndKeyValSubscriber(Node &node)
+        : log_sub(node), kv_sub(node), m_prevCounter(0), m_hangNow(false){};
 
-  void subscribeLog()
-  {    
-    /*
+    void subscribeLog()
+    {
+        /*
      * Subscribing to standard log messages of type uavcan.protocol.debug.LogMessage.
      *
      * Received messages will be passed to the application via a callback, the type of which can be set via the second
@@ -259,36 +255,38 @@ class logAndKeyValSubscriber
      * transfer was picked up from, etc.
      */
 
-    const int log_sub_start_res = log_sub.start(
-        [&](const uavcan::ReceivedDataStructure<uavcan::protocol::debug::LogMessage>& msg)
-        {
-            /*
+        const int log_sub_start_res =
+            log_sub.start([&](const uavcan::ReceivedDataStructure<
+                              uavcan::protocol::debug::LogMessage> &msg) {
+                /*
              * The message will be streamed in YAML format.
              */
-            //std::cout << msg << std::endl;
-            /*
+                //std::cout << msg << std::endl;
+                /*
              * If the standard iostreams are not available (they rarely available in embedded environments),
              * use the helper class uavcan::OStream defined in the header file <uavcan/helpers/ostream.hpp>.
              */
-             //uavcan::OStream::instance() << msg << uavcan::OStream::endl;
-             std::cout << "Node:" << msg.getSrcNodeID().get() << ", Text:" << msg.text.c_str() << std::endl;
-        });
-      /*
+                //uavcan::OStream::instance() << msg << uavcan::OStream::endl;
+                std::cout << "Node:" << msg.getSrcNodeID().get()
+                          << ", Text:" << msg.text.c_str() << std::endl;
+            });
+        /*
       * C++03 WARNING
       * The code above will not compile in C++03, because it uses a lambda function.
       * In order to compile the code in C++03, move the code from the lambda to a standalone static function.
       * Use uavcan::MethodBinder<> to invoke member functions.
       */
 
-      if (log_sub_start_res < 0)
-      {
-          std::cerr <<"Failed to start the log subscriber; error: " << log_sub_start_res;
-      }
-      else
-      {
-        std::cout <<"Subscribing to Logs\n";
-      }
-  };
+        if (log_sub_start_res < 0)
+        {
+            std::cerr << "Failed to start the log subscriber; error: "
+                      << log_sub_start_res;
+        }
+        else
+        {
+            std::cout << "Subscribing to Logs\n";
+        }
+    };
 
     /*
      * Subscribing to messages of type uavcan.protocol.debug.KeyValue.
@@ -296,49 +294,51 @@ class logAndKeyValSubscriber
      * would be just T& instead of uavcan::ReceivedDataStructure<T>&.
      * The callback will print the message in YAML format via std::cout (also refer to uavcan::OStream).
      */
-  void keyValSubscribe()
-  {
-    const int kv_sub_start_res =
-        kv_sub.start([&](const uavcan::protocol::debug::KeyValue& msg) 
-        { 
-          //std::cout << msg << std::endl; 
-          //uavcan::OStream::instance() << msg << uavcan::OStream::endl;
-          uint64_t current = (uint64_t)msg.value;
-          if (((m_prevCounter+1) != current) && //We have missed a packet
-            (m_prevCounter != 0)) //and not just starting off
-          {
-            //m_hangNow = true; //##### There seems to be a case where a CAN layer packet squash at a very particular time in 
-                                //Key value pair reception, that can cause a event to be lost.  Howver this was a grossly
-                                //unrelalistic test just to bash the stack (i.e. 1/10 packets squshed).  There is very close
-                                //to zero risk of this happening in the field.
-            std::cout << "ERROR: Key:"<< msg.key.c_str() << ", Val:" << msg.value << ", Prev:" << m_prevCounter << "\r";
-          }
-          else
-          {
-            #if (VERBOSE_MODE)
-              std::cout << "Key:"<< msg.key.c_str() << ", Val:" << msg.value << ", Prev:" << m_prevCounter << "\r";
-            #endif
-          }
-          
-          m_prevCounter = current;
-          STM_EVAL_LEDToggle(LED_TX);
+    void keyValSubscribe()
+    {
+        const int kv_sub_start_res = kv_sub.start([&](const uavcan::protocol::
+                                                          debug::KeyValue &msg) {
+            //std::cout << msg << std::endl;
+            //uavcan::OStream::instance() << msg << uavcan::OStream::endl;
+            uint64_t current = (uint64_t)msg.value;
+            if (((m_prevCounter + 1) != current) &&   //We have missed a packet
+                (m_prevCounter != 0))                 //and not just starting off
+            {
+                //m_hangNow = true; //##### There seems to be a case where a CAN layer packet squash at a very particular time in
+                //Key value pair reception, that can cause a event to be lost.  Howver this was a grossly
+                //unrelalistic test just to bash the stack (i.e. 1/10 packets squshed).  There is very close
+                //to zero risk of this happening in the field.
+                std::cout << "ERROR: Key:" << msg.key.c_str() << ", Val:" << msg.value
+                          << ", Prev:" << m_prevCounter << "\r";
+            }
+            else
+            {
+#if (VERBOSE_MODE)
+                std::cout << "Key:" << msg.key.c_str() << ", Val:" << msg.value
+                          << ", Prev:" << m_prevCounter << "\r";
+#endif
+            }
+
+            m_prevCounter = current;
+            STM_EVAL_LEDToggle(LED_TX);
         });
 
-    if (kv_sub_start_res < 0)
-    {
-        std::cerr <<"Failed to start the key/value subscriber; error: " << kv_sub_start_res;
-    }
-    else
-    {
-      std::cout <<"Subscribing to keyValPair\n";
-    }
-  };
+        if (kv_sub_start_res < 0)
+        {
+            std::cerr << "Failed to start the key/value subscriber; error: "
+                      << kv_sub_start_res;
+        }
+        else
+        {
+            std::cout << "Subscribing to keyValPair\n";
+        }
+    };
 };
 
 using uavcan::protocol::file::BeginFirmwareUpdate;
 class FWUpdateService
 {
-  /*
+    /*
     * Starting the server.
     * This server doesn't do anything useful; it just prints the received request and returns some meaningless
     * response.
@@ -360,87 +360,85 @@ class FWUpdateService
     uavcan::ServiceServer<BeginFirmwareUpdate> srv;
     uint64_t m_counter;
 
-    public:
-    FWUpdateService( Node &node ):
-    srv(node),
-    m_counter(0) 
-    {
-    };
+  public:
+    FWUpdateService(Node &node)
+        : srv(node), m_counter(0){};
 
-    void startService() 
+    void startService()
     {
-      const int srv_start_res = srv.start(
-      [&](const uavcan::ReceivedDataStructure<BeginFirmwareUpdate::Request>& req, BeginFirmwareUpdate::Response& rsp)
-      {
-          #if (VERBOSE_MODE)
-            std::cout << req << std::endl;
-          #endif
-          rsp.error = rsp.ERROR_UNKNOWN;
-          // std::string s = "Some Error Msg [" + patch::to_string(m_counter) + "]\n";
-          // rsp.optional_error_message = s.c_str();
-          rsp.optional_error_message = req.image_file_remote_path.path.c_str();
-          STM_EVAL_LEDToggle(LED_CAN_ERR);
-          #if (VERBOSE_MODE)
-            std::cout << "FWUpdate msg, Counter:"<< m_counter++ << std::endl;
-          #endif
-      });
-      /*
+        const int srv_start_res = srv.start(
+            [&](const uavcan::ReceivedDataStructure<BeginFirmwareUpdate::Request> &
+                    req,
+                BeginFirmwareUpdate::Response &rsp) {
+#if (VERBOSE_MODE)
+                std::cout << req << std::endl;
+#endif
+                rsp.error = rsp.ERROR_UNKNOWN;
+                // std::string s = "Some Error Msg [" + patch::to_string(m_counter) + "]\n";
+                // rsp.optional_error_message = s.c_str();
+                rsp.optional_error_message = req.image_file_remote_path.path.c_str();
+                STM_EVAL_LEDToggle(LED_CAN_ERR);
+#if (VERBOSE_MODE)
+                std::cout << "FWUpdate msg, Counter:" << m_counter++ << std::endl;
+#endif
+            });
+        /*
       * C++03 WARNING
       * The code above will not compile in C++03, because it uses a lambda function.
       * In order to compile the code in C++03, move the code from the lambda to a standalone static function.
       * Use uavcan::MethodBinder<> to invoke member functions.
       */
 
-      if (srv_start_res < 0)
-      {
-          std::exit(1);                   // TODO proper error handling
-      }
-      else
-      {        
-        std::cout<<"Starting FWUpdate service"<<std::endl;
-      }
-    };    
+        if (srv_start_res < 0)
+        {
+            std::exit(1);   // TODO proper error handling
+        }
+        else
+        {
+            std::cout << "Starting FWUpdate service" << std::endl;
+        }
+    };
 };
-
 
 using uavcan::protocol::file::BeginFirmwareUpdate;
 class FWUpdateClient
-{  
-  uavcan::ServiceClient<BeginFirmwareUpdate> client;
-  uint32_t m_counter;
-  public: 
-  volatile bool m_hangNow;
+{
+    uavcan::ServiceClient<BeginFirmwareUpdate> client;
+    uint32_t m_counter;
 
   public:
-  FWUpdateClient( Node &node ):
-  client(node),
-  m_counter(0),
-  m_hangNow(false)
-  {
-    std::cout<<"Instantiating FWUpdateClient\n";
-  };
+    volatile bool m_hangNow;
 
-  void InitClient()
-  {  /*
+  public:
+    FWUpdateClient(Node &node)
+        : client(node), m_counter(0), m_hangNow(false)
+    {
+        std::cout << "Instantiating FWUpdateClient\n";
+    };
+
+    void InitClient()
+    { /*
      * Initializing the client. Remember that client objects are noncopyable.
      * Note that calling client.init() is not necessary - the object can be initialized ad hoc during the first call.
      */
-    const int client_init_res = client.init();
-    if (client_init_res < 0)
-    {
-        std::cerr <<"Failed to init the client; error: " << patch::to_string(client_init_res);
-        return;
-    }
+        const int client_init_res = client.init();
+        if (client_init_res < 0)
+        {
+            std::cerr << "Failed to init the client; error: "
+                      << patch::to_string(client_init_res);
+            return;
+        }
 
-    /*
+        /*
      * Setting the callback.
      * This callback will be executed when the call is completed.
      * Note that the callback will ALWAYS be called even if the service call has timed out; this guarantee
      * allows to simplify error handling in the application.
-     */
-    client.setCallback([&](const uavcan::ServiceCallResult<BeginFirmwareUpdate>& call_result)
-        {
-            if (call_result.isSuccessful())  // Whether the call was successful, i.e. whether the response was received
+  */
+        client.setCallback([&](const uavcan::ServiceCallResult<BeginFirmwareUpdate> &
+                                   call_result) {
+            if (call_result
+                    .isSuccessful())   // Whether the call was successful, i.e. whether the response was received
             {
                 // The result can be directly streamed; the output will be formatted in human-readable YAML.
                 //std::cout << call_result << std::endl;
@@ -448,63 +446,65 @@ class FWUpdateClient
                 ulong resp = std::strtoul(s.c_str(), nullptr, 10);
                 if (resp != m_counter)
                 {
-                  std::cout<<"ERROR: Counter:"<<m_counter<<",returnVal:"<<resp<<std::endl;
-                  m_hangNow = true;
+                    std::cout << "ERROR: Counter:" << m_counter << ",returnVal:" << resp
+                              << std::endl;
+                    m_hangNow = true;
                 }
                 else
                 {
-                  #if (VERBOSE_MODE==1)
+#if (VERBOSE_MODE == 1)
                     std::cout << s << std::endl;
-                  #endif
+#endif
                 }
-                
+
                 STM_EVAL_LEDToggle(LED_CAN_ERR);
             }
             else
             {
-                #if (VERBOSE_MODE==1)
+#if (VERBOSE_MODE == 1)
                 std::cerr << "Service call to node "
-                          << static_cast<int>(call_result.getCallID().server_node_id.get())
+                          << static_cast<int>(
+                                 call_result.getCallID().server_node_id.get())
                           << " has failed" << std::endl;
-                #endif
+#endif
             }
         });
-    /*
+        /*
      * C++03 WARNING
      * The code above will not compile in C++03, because it uses a lambda function.
      * In order to compile the code in C++03, move the code from the lambda to a standalone static function.
      * Use uavcan::MethodBinder<> to invoke member functions.
      */
 
-    /*
+        /*
      * Service call timeout can be overridden if needed, though it's not recommended.
      */
-    client.setRequestTimeout(uavcan::MonotonicDuration::fromMSec(200));
+        client.setRequestTimeout(uavcan::MonotonicDuration::fromMSec(200));
 
-    /*
+        /*
      * It is possible to adjust priority of the outgoing service request transfers.
      * According to the specification, the services are supposed to use the same priority for response transfers.
      * Default priority is medium, which is 16.
      */
-    client.setPriority(uavcan::TransferPriority::OneHigherThanLowest);
-  };
-  void callFWUpdate(uint8_t server_node_id)
+        client.setPriority(uavcan::TransferPriority::OneHigherThanLowest);
+    };
+    void callFWUpdate(uint8_t server_node_id)
     {
-      /*
+        /*
       * Calling the remote service.
       * Generated service data types have two nested types:
       *   T::Request  - request data structure
       *   T::Response - response data structure
       * For the service data structure, it is not possible to instantiate T itself, nor does it make any sense.
       */
-      BeginFirmwareUpdate::Request request;
-      m_counter++;
-      //request.image_file_remote_path.path = "/some/path/for/file";
-      char s[20];
-      snprintf(s, 20, "%08ld", m_counter);
-      request.image_file_remote_path.path = s;
+        BeginFirmwareUpdate::Request request;
+        m_counter++;
+        //request.image_file_remote_path.path = "/some/path/for/file";
+        char s[20];
+        snprintf(s, 20, "%08ld", m_counter);
+        request.image_file_remote_path.path = s;
 
-      /*
+        /*
       * It is possible to perform multiple concurrent calls using the same client object.
       * The class ServiceClient provides the following methods that allow to control execution of each call:
       *
@@ -530,18 +530,18 @@ class FWUpdateClient
       *  bool hasPendingCalls() const
       *      Whether the client object has any pending calls at the moment.
       */
-      const int call_res = client.call(server_node_id, request);
-      if (call_res < 0)
-      {
-          //std:: << "Unable to perform service call: " << patch::to_string(call_res);
-          std::cout<<"Unable to perform service call:"<<m_counter<<"\n";
-          return;
-      }
+        const int call_res = client.call(server_node_id, request);
+        if (call_res < 0)
+        {
+            //std:: << "Unable to perform service call: " << patch::to_string(call_res);
+            std::cout << "Unable to perform service call:" << m_counter << "\n";
+            return;
+        }
     };
 
     bool HasPendingCalls()
     {
-      return client.hasPendingCalls();
+        return client.hasPendingCalls();
     };
 };
 
@@ -560,7 +560,7 @@ class FWUpdateClient
  *  Request Response                        [DONE]
  *  Pub sub                                 [DONE]
  * 
- */ 
+ */
 /**
 **===========================================================================
 **
@@ -570,7 +570,7 @@ class FWUpdateClient
 */
 int main(void)
 {
-  /**
+    /**
   *  IMPORTANT NOTE!
   *  The symbol VECT_TAB_SRAM needs to be defined when building the project
   *  if code has been located to RAM and interrupts are used. 
@@ -580,170 +580,175 @@ int main(void)
   *  E.g.  SCB->VTOR = 0x20000000;  
   */
 
-  /* TODO - Add your application code here */
+    /* TODO - Add your application code here */
 
-  /* Initialize LEDs */
-  printf("Initing Pins\n");
-  STM_EVAL_LEDInit(LED_LOOP);
-  STM_EVAL_LEDInit(LED_TX);
-  STM_EVAL_LEDInit(LED_CAN_ERR);
-  STM_EVAL_LEDInit(LED_CAN_OK);
-  STM_EVAL_CANInit();
-  STM_EVAL_PBInit(BUTTON_USER, BUTTON_MODE_GPIO);
+    /* Initialize LEDs */
+    printf("Initing Pins\n");
+    STM_EVAL_LEDInit(LED_LOOP);
+    STM_EVAL_LEDInit(LED_TX);
+    STM_EVAL_LEDInit(LED_CAN_ERR);
+    STM_EVAL_LEDInit(LED_CAN_OK);
+    STM_EVAL_CANInit();
+    STM_EVAL_PBInit(BUTTON_USER, BUTTON_MODE_GPIO);
 
-  /* Turn LEDs */
-  STM_EVAL_LEDOn(LED_LOOP);
-  STM_EVAL_LEDOff(LED_TX);
-  STM_EVAL_LEDOff(LED_CAN_ERR);
-  STM_EVAL_LEDOff(LED_CAN_OK);
+    /* Turn LEDs */
+    STM_EVAL_LEDOn(LED_LOOP);
+    STM_EVAL_LEDOff(LED_TX);
+    STM_EVAL_LEDOff(LED_CAN_ERR);
+    STM_EVAL_LEDOff(LED_CAN_OK);
 
-  while (!STM_EVAL_PBGetState(BUTTON_USER));
+    while (!STM_EVAL_PBGetState(BUTTON_USER))
+        ;
 
-#if (PUBLISHER==1)
-  const int self_node_id = 1;
+#if (PUBLISHER == 1)
+    const int self_node_id = 1;
 #else
-  const int self_node_id = 5;
+    const int self_node_id = 2;
 #endif
 
-  /*
+    /*
     * Node initialization.
     * Node ID and name are required; otherwise, the node will refuse to start.
     * Version info is optional.
     */
-  auto& node = getNode();
+    auto &node = getNode();
 
-  node.setNodeID(self_node_id);
+    node.setNodeID(self_node_id);
 
-#if (PUBLISHER==1)
-  node.setName("org.uavcan.tutorial.test.messages.pub");
+#if (PUBLISHER == 1)
+    node.setName("org.uavcan.tutorial.test.messages.pub");
 #else
-  node.setName("org.uavcan.tutorial.test.messages.sub");
+    node.setName("org.uavcan.tutorial.test.messages.sub");
 #endif
 
-  uavcan::protocol::SoftwareVersion sw_version;  // Standard type uavcan.protocol.SoftwareVersion
-  sw_version.major = 1;
-  node.setSoftwareVersion(sw_version);
+    uavcan::protocol::SoftwareVersion
+        sw_version;   // Standard type uavcan.protocol.SoftwareVersion
+    sw_version.major = 1;
+    node.setSoftwareVersion(sw_version);
 
-  uavcan::protocol::HardwareVersion hw_version;  // Standard type uavcan.protocol.HardwareVersion
-  hw_version.major = 1;
-  node.setHardwareVersion(hw_version);
+    uavcan::protocol::HardwareVersion
+        hw_version;   // Standard type uavcan.protocol.HardwareVersion
+    hw_version.major = 1;
+    node.setHardwareVersion(hw_version);
 
-  /*
-    * Start the node.
-    * All returnable error codes are listed in the header file uavcan/error.hpp.
-    */
-   /*
+    /** 
+     * Start the node.
+     * All returnable error codes are listed in the header file uavcan/error.hpp.
+     */
+    /**
      * Dependent objects (e.g. publishers, subscribers, servers, callers, timers, ...) can be initialized only
      * if the node is running. Note that all dependent objects always keep a reference to the node object.
      */
-  const int node_start_res = node.start();
-  if (node_start_res < 0)
-  {
-      std::cout<<"Failed to start the node; error: " <<node_start_res;
-  }
+    const int node_start_res = node.start();
+    if (node_start_res < 0)
+    {
+        std::cout << "Failed to start the node; error: " << node_start_res;
+    }
 
-#if (PUBLISHER==1)
-  keyValPublisher kvpub(node);
-  FWUpdateService fwUpdate(node);
-  fwUpdate.startService();
+#if (PUBLISHER == 1)
+    keyValPublisher kvpub(node);
+    FWUpdateService fwUpdate(node);
+    fwUpdate.startService();
 #else
-  logAndKeyValSubscriber subscriber(node);
-  //subscriber.subscribeLog();
-  subscriber.keyValSubscribe();
-  FWUpdateClient fwUpdateClient(node);
-  fwUpdateClient.InitClient();
-  uint32_t counter=0;
+    logAndKeyValSubscriber subscriber(node);
+    //subscriber.subscribeLog();
+    subscriber.keyValSubscribe();
+    FWUpdateClient fwUpdateClient(node);
+    fwUpdateClient.InitClient();
+    uint32_t counter = 0;
 #endif
-  
-  /*
+
+    /**
     * Informing other nodes that we're ready to work.
     * Default mode is INITIALIZING.
     */
-  node.setModeOperational();
+    node.setModeOperational();
 
-  /*
+    /*
     * Some logging.
     * Log formatting is not available in C++03 mode.
     */
-  node.getLogger().setLevel(uavcan::protocol::debug::LogLevel::DEBUG);
-  node.logInfo("main", "Hello world! My Node ID: %*",
-                static_cast<int>(node.getNodeID().get()));
+    node.getLogger().setLevel(uavcan::protocol::debug::LogLevel::DEBUG);
+    node.logInfo("main",
+                 "Hello world! My Node ID: %*",
+                 static_cast<int>(node.getNodeID().get()));
 
-  std::cout << "Hello world!" << std::endl;
+    std::cout << "Hello world!" << std::endl;
 
-  /*
+    /*
     * Node loop.
     * The thread should not block outside Node::spin().
     */
-  auto firstRun = true;
-  while (true)
-  {    
-    /*
+    auto firstRun = true;
+    while (true)
+    {
+/*
       * If there's nothing to do, the thread blocks inside the driver's
       * method select() until the timeout expires or an error occurs (e.g. driver failure).
       * All error codes are listed in the header uavcan/error.hpp.
       */
-    #if (PUBLISHER==1)
-      const int res = node.spin(uavcan::MonotonicDuration::fromMSec(1000));
-      STM_EVAL_LEDToggle(LED_LOOP);
-    #else
-      const int res = node.spin(uavcan::MonotonicDuration::fromMSec(10));
-      if (((counter++)%10)==0) //only do it 10th time around the loop so LEDs look different
+#if (PUBLISHER == 1)
+        const int res = node.spin(uavcan::MonotonicDuration::fromMSec(1000));
         STM_EVAL_LEDToggle(LED_LOOP);
-    #endif
-    if (res < 0)
-    {
-        std::cerr << "Transient failure: " << res << std::endl;
-    }
+#else
+        const int res = node.spin(uavcan::MonotonicDuration::fromMSec(10));
+        if (((counter++) % 10) ==
+            0)   //only do it 10th time around the loop so LEDs look different
+            STM_EVAL_LEDToggle(LED_LOOP);
+#endif
+        if (res < 0)
+        {
+            std::cerr << "Transient failure: " << res << std::endl;
+        }
 
-    /*
+        /*
       * Random status transitions.
       * In real applications, the status code shall reflect node's health.
       */
-    if (firstRun)
-    {
-        node.setHealthOk();
-        STM_EVAL_LEDOn(LED_CAN_OK);
-        STM_EVAL_LEDOff(LED_CAN_ERR);
-        firstRun = false;
-    }
+        if (firstRun)
+        {
+            node.setHealthOk();
+            STM_EVAL_LEDOn(LED_CAN_OK);
+            STM_EVAL_LEDOff(LED_CAN_ERR);
+            firstRun = false;
+        }
 
-  #if (PUBLISHER==1)
-    kvpub.publishKeyValPair();
-  #else
-    if (!fwUpdateClient.HasPendingCalls())
-    {
-      fwUpdateClient.callFWUpdate(1);
+#if (PUBLISHER == 1)
+        kvpub.publishKeyValPair();
+#else
+        if (!fwUpdateClient.HasPendingCalls())
+        {
+            fwUpdateClient.callFWUpdate(1);
+        }
+        if ((fwUpdateClient.m_hangNow) || (subscriber.m_hangNow))
+        {
+            //Discrepancy between what was sent and received or
+            //Missed a subscribed val
+            //  Stop!
+            std::cout << "STOP" << std::endl;
+            break;
+        }
+#endif
     }
-    if ((fwUpdateClient.m_hangNow) || (subscriber.m_hangNow))
-    {
-      //Discrepancy between what was sent and received or 
-      //Missed a subscribed val
-      //  Stop!
-      std::cout<<"STOP"<<std::endl;
-      break;
-    }
-  #endif
-  }
 }
-
-
 
 /*
  * Callback used by stm32f4_discovery_audio_codec.c.
  * Refer to stm32f4_discovery_audio_codec.h for more info.
  */
-extern "C" void EVAL_AUDIO_TransferComplete_CallBack(uint32_t pBuffer, uint32_t Size){
-  /* TODO, implement your code here */
-  return;
+extern "C" void EVAL_AUDIO_TransferComplete_CallBack(uint32_t pBuffer,
+                                                     uint32_t Size)
+{
+    /* TODO, implement your code here */
+    return;
 }
 
 /*
  * Callback used by stm324xg_eval_audio_codec.c.
  * Refer to stm324xg_eval_audio_codec.h for more info.
  */
-extern "C" uint16_t EVAL_AUDIO_GetSampleCallBack(void){
-  /* TODO, implement your code here */
-  return -1;
+extern "C" uint16_t EVAL_AUDIO_GetSampleCallBack(void)
+{
+    /* TODO, implement your code here */
+    return -1;
 }
-
